@@ -3,7 +3,10 @@
 You are working this half. The firmware logic already exists in `../core/` and
 will not need to change for your design, as long as the HAL contract below (`../core/include/desk/hal.h`) is met.
 
-Read `../README.md` first. **Run this on the owner's desktop/WSL2, not the agent
+Read `../README.md`, then `MOTOR-DECISION.md` (supply: 48 V recommended, motor
+likely NEMA 23 at ~2 A/phase — size the driver stage and rail for it) and
+`TMC5160-CONFIG-PLAN.md` (register plan; §0 is the part-selection decision you
+need from the owner early). **Run this on the owner's desktop/WSL2, not the agent
 server** — that box has no display, and KiCad's IPC API needs a running GUI
 session. `kicad-cli` alone is not enough for anything interactive.
 

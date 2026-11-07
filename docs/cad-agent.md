@@ -3,9 +3,17 @@
 You are working this half. The software is done and will not need to change for
 whatever you produce, **as long as the interface contract below holds**.
 
-Read `../README.md` first. The relevant contract is three numbers in the machine
-profile: `gear_ratio`, `steps_per_motor_rev`, `mm_per_shaft_rev`. You own the
-first. The second is firmware config. The third is the bench's physics.
+Read `../README.md` first, then `MOTOR-DECISION.md`. The contract is three
+numbers in the machine profile: `gear_ratio`, `steps_per_motor_rev`,
+`mm_per_shaft_rev`. You own the first. The second is firmware config. The third
+is the bench's physics.
+
+**Gating input:** the sizing checklist in `MOTOR-DECISION.md` (two weigh-ins,
+two tape measurements) must be complete before you choose a tooth count. The
+bench is the owner's **Husky 46×24** (profile `machines/husky-46x24.machine.json`,
+same 330 mm span as the 52″). Working load ~45-55 kg; recommended actuator
+NEMA 23 @ 48 V, so size the motor mount for a 56 mm square face, 4× M4 on 47 mm,
+~1 kg — not NEMA 17 — unless MOTOR-DECISION lands otherwise.
 
 ## Where to run this
 
