@@ -12,7 +12,7 @@ core/          motion planner, stall detection, homing, presets  <- generic
 machines/      one .machine.json per desk                         <- the seam
 cli/           host simulator: run the real controller, no hardware
 firmware/          ESP32 firmware — not yet written
-husky-bench/   prints, wiring, build guide for one specific bench
+husky-bench/   prints, wiring, build guide for the specific bench
 docs/          handoff specs for the print and PCB workstreams
 ```
 
@@ -24,9 +24,11 @@ docs/          handoff specs for the print and PCB workstreams
 | Simulator + machine-profile loader | **done** |
 | Husky machine profile | numbers present, **three must be measured** |
 | Motor/gearbox sizing model | `scripts/sizing.py`, validated against published desk speeds |
-| ESP32 firmware | in progress — `firmware/` |
+| ESP32 firmware | compiling scaffold, no hardware yet — `firmware/` |
+| Motor & supply decision | recommended, awaiting 2 measurements — `docs/MOTOR-DECISION.md` |
+| TMC5160 SPI config (biggest firmware gap) | planned — `docs/TMC5160-CONFIG-PLAN.md` |
 | Printed gearbox / mount | not started — see `docs/cad-agent.md` |
-| Control PCB | not started — see `docs/pcb-agent.md` |
+| Control PCB | not started — see `docs/pcb-agent.md` (note: 5160 needs external MOSFETs) |
 
 ## Why this shape
 
@@ -89,12 +91,12 @@ python3 scripts/sizing.py --load-kg 50   # can it actually be fast enough?
 make run           # simulate the Husky profile end to end
 
 # drive it by hand
-./build/deskbot-sim machines/husky-52x24.machine.json \
+./build/deskbot-sim machines/husky-46x24.machine.json \
     --script 'home,go=950,go=700,status'
 
 # break things on purpose - do this before you break a real desk
-./build/deskbot-sim machines/husky-52x24.machine.json --stall-at 800 --script 'home'
-./build/deskbot-sim machines/husky-52x24.machine.json --slip-at 2 --slip-rate 0.6 \
+./build/deskbot-sim machines/husky-46x24.machine.json --stall-at 800 --script 'home'
+./build/deskbot-sim machines/husky-46x24.machine.json --slip-at 2 --slip-rate 0.6 \
     --script 'home,go=950'
 ```
 
@@ -102,7 +104,7 @@ Requirements: g++ or clang with C++17. Nothing else.
 
 ## Adding a desk
 
-Copy `machines/husky-52x24.machine.json`, change the numbers, run
+Copy `machines/husky-46x24.machine.json`, change the numbers, run
 `make test`-equivalent against it. The `coupling` field is the one that actually
 matters:
 

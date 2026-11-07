@@ -11,7 +11,7 @@ Why a generated header and not a runtime parse of a file:
     numbers and no second hand-maintained copy of the constants.
 
 Usage (from firmware/):
-    python3 scripts/gen_machine_header.py ../machines/husky-52x24.machine.json
+    python3 scripts/gen_machine_header.py ../machines/husky-46x24.machine.json
 writes  firmware/include/generated/machine_profile_json.h  (committed on
 purpose: `pio run` must build with no python step and no repo-relative paths).
 

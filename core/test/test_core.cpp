@@ -33,7 +33,7 @@ static bool faults_any(const FakeBench& b) { return b.ctl.faults().any(); }
 
 static MachineProfile husky() {
   MachineProfile m{};
-  m.name = "husky-52x24";
+  m.name = "husky-46x24";
   m.drive = DriveKind::StepperPulse;
   m.feedback = FeedbackKind::MotorEncoder;
   m.coupling = AxisCoupling::Single;

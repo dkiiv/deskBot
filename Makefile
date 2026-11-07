@@ -34,7 +34,7 @@ sim: $(BUILD)/deskbot-sim
 
 # A quick end-to-end sanity run against the Husky profile.
 run: sim
-	./$(BUILD)/deskbot-sim machines/husky-52x24.machine.json
+	./$(BUILD)/deskbot-sim machines/husky-46x24.machine.json
 
 clean:
 	rm -rf $(BUILD)

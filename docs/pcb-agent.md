@@ -90,8 +90,9 @@ everything else is yours.
 
 **Parts, with the reasoning that matters:**
 
-- **Driver: TMC5160 (SPI), not TMC2209.** Two independent reasons, both load-
-  bearing:
+- **Driver: TMC5160 (SPI), not TMC2209.** Three independent reasons, all load-
+  bearing, plus one part-selection catch below. Register-level plan:
+  `TMC5160-CONFIG-PLAN.md`.
   1. *Voltage headroom.* TMC2209's absolute maximum on VS is 33 V with 29 V
      operating. A 24 V supply is already at 83 % of absolute maximum, and a
      bench gets bumped, dragged across a garage floor, and plugged into whatever
@@ -104,8 +105,20 @@ everything else is yours.
      slept on and the step timing stops depending on WiFi interrupts. The core
      still supervises position in software either way — that is where the safety
      logic lives — but having the hardware ramp means no EMI-ghost-step surprise
-     becomes a stall you cannot distinguish from a jam.
-  3. **VMTB / heatsink:** these packages need their exposed pad soldered to real
+     becomes a stall you cannot distinguish from a jam. (Note: `TMC5160-
+     CONFIG-PLAN.md` §5 decides NOT to use the on-chip ramp — two planners is
+     a bug factory — but having the option, and the SPI + encoder inputs,
+     still distinguishes the part.)
+  3. **Part-selection catch: the 5160 has NO output stage.** It is a gate
+     driver — the four power MOSFETs and current-sense resistors are external,
+     per the datasheet application circuit. Budget for 4× N-channel power
+     MOSFETs (logic-level gate, ≥60 V, ≥ the IRUN you size), 4 gate drive
+     paths, and 2 sense resistors (0.05 Ω class) as real BOM and layout work,
+     or deliberately pick the discrete-module carrier route instead. Do not
+     discover this during layout. (If integrated FETs feel mandatory, the
+     fallback is TMC5130 — but that caps the rail at ~36 V and coil at 2 A
+     RMS, which constrains the motor decision; see MOTOR-DECISION.md.)
+  4. **VMTB / heatsink:** these packages need their exposed pad soldered to real
      copper with vias to an internal plane. A "soldered-down module" without
      that is how you get a driver that works on the bench and thermally trips
      after 40 seconds of lifting. Budget copper, not a heatsink you glue on.

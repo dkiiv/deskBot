@@ -5,7 +5,7 @@
 // ESP32 runs. It is also the fastest way to see why a set of numbers is wrong
 // before anything is printed or soldered.
 //
-//   ./build/deskbot-sim machines/husky-52x24.machine.json
+//   ./build/deskbot-sim machines/husky-46x24.machine.json
 //   ./build/deskbot-sim <profile> --script home,go=900,go=700,status
 //   ./build/deskbot-sim <profile> --inject stall_at=880
 //   ./build/deskbot-sim <profile> --profile-only     # validate + echo numbers

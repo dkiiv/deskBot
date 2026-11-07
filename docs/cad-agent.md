@@ -220,7 +220,7 @@ one that was modelled on a lucky gearbox.
    **before** the housing.
 3. `husky-bench/cad/drawing/` — one PDF/HTML assembly view with dimensions that a human can
    check against their actual bench with a ruler.
-4. Update `../machines/husky-52x24.machine.json` with the real `gear_ratio` and
+4. Update `../machines/husky-46x24.machine.json` with the real `gear_ratio` and
    mark the two measured values as measured (date + method in a comment field).
 5. `../husky-bench/BUILD.md` — print settings that worked, orientation, insert
    strategy, assembly order, and what failed.

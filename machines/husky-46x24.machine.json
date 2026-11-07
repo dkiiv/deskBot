@@ -1,15 +1,15 @@
 {
   "identity": {
-    "name": "husky-52x24",
-    "url": "https://www.homedepot.com/p/Husky-52-in-Adjustable-Height-Work-Table",
+    "name": "husky-46x24",
+    "url": "https://www.homedepot.com/p/Husky-46-in-W-x-24-in-D-Adjustable-Height-Black-Workbench-Table-with-Solid-Wood-Top-HOLT46XDB12/301809931",
     "profile_version": 1,
     "derived": {
-      "travel_span_mm": "39 in - 26 in = 13 in = 330 mm (leveling-feet config, published spec)",
+      "travel_span_mm": "39 in - 26 in = 13 in = 330 mm (leveling-feet config, published spec for the 46 in model; the 52 in model shares this span)",
       "mm_per_shaft_rev": "330 mm / ~60 owner-reported crank turns = 5.5 mm per turn",
       "warning": "confirm both with a tape measure; scripts/calibrate.py does this in two minutes"
     },
     "notes": [
-      "Husky 46/52/62 in adjustable-height work table, hand crank.",
+      "Husky 46 x 24 in adjustable-height work table (HOLT46XDB12), hand crank.",
       "ONE crank shaft runs through both legs, so coupling is single: the legs",
       "physically cannot tilt apart and the software must never try to",
       "equalise them. Skew on this machine is a broken-mechanism alarm only.",

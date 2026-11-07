@@ -23,12 +23,12 @@ unrelated reasons).
 
 ### Machine profile: one JSON, generated header
 
-The machine definition is `../machines/husky-52x24.machine.json` — the same
+The machine definition is `../machines/husky-46x24.machine.json` — the same
 file the simulator loads. It is embedded as **verbatim JSON text** in a
 generated header and parsed at boot:
 
 ```sh
-python3 scripts/gen_machine_header.py ../machines/husky-52x24.machine.json
+python3 scripts/gen_machine_header.py ../machines/husky-46x24.machine.json
 # -> include/generated/machine_profile_json.h   (committed; keep it in sync)
 ```
 
