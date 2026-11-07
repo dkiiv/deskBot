@@ -80,6 +80,29 @@ Next: serial command handling exists; Wi-Fi/HaaS deliberately absent.
 (`Inputs::stall_guard_load`) — needs owner sign-off, not unilateral core
 edits. Add features via machine JSON fields where possible.
 
+## Who embeds core — and why core is not inside firmware/
+
+```
+                    core/ — the engine: planner, homing, stall/thermal/skew.
+                    header-only C++17, no Arduino/ESP headers, compiles anywhere.
+                        |                               |
+            firmware/  <- host #1            tests/  <- host #2
+            ESP32-S3 HAL: pins, TMC5160,     FakeBench HAL (desktop): the same
+            AS5600, WiFi... -> firmware.bin  engine driving a simulated desk
+```
+
+`firmware/` is a *consumer* of `core/`, not its parent. The application logic
+**is** core — firmware is core plus board glue; the simulator is core plus a
+fake world. If core lived under `firmware/`, then `tests/core` and `tests/sim`
+— which are not firmware and run with no ESP32 toolchain — would include from
+inside it, and the safety engine would nominally belong to one board. The
+folder split is also what makes the rules mechanically checkable: `make test`
+proving core compiles with zero Arduino headers is the enforcement of "portable
+engine"; nested folders can't enforce that. (Library + app separation, like any
+`lib/` + `src/` — the library just earns top billing because it carries the
+safety logic and its own test suite.)
+
+
 ## Rules for agents
 
 1. `make test` green before any commit. Red CI blocks everything else.
