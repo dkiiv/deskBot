@@ -177,6 +177,30 @@ it is why the encoder is worth the $3 in the PCB spec.
 
 ---
 
+## Homing is the recovery path, so it must not be gated by the fault it fixes
+
+**Chosen.** `Controller::home()` refuses only the faults homing cannot fix
+(e-stop, over-temp, stall, blocked, home-timeout). On a successful anchor it
+clears `position_lost` and `skew`, and only those. Supervisor evaluates limit
+switches *last*, after stall and skew.
+
+**Why.** Both were catch-22s found by the firmware lane, and both are my code's
+bugs: (1) `home()` sat behind `can_move()`, and `position_lost` is in
+`any_hard()` — the latch that blocked motion was the latch only homing could
+clear, so a desk someone leaned on was bricked. (2) The supervisor early-
+returned on a limit switch, and a parked desk sits on a limit switch
+*forever*, so stall and skew detection were silently disabled in the state the
+desk spends 99 % of its life in. A tilted frame against a stop is still a
+tilted frame.
+
+**Rule extracted:** in a safety state machine, the recovery operation must be
+reachable from the fault state by construction — if recovery is gated on
+"healthy", the machine is only recoverable by someone who understands its
+internals. And "return early on benign condition" is a request to disable
+every check below it.
+
+---
+
 ## `mm_per_shaft_rev` is measured, never inferred from gearing
 
 **Chosen.** `scripts/calibrate.py` takes it from a tape measure and a turn count,
