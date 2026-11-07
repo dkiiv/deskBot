@@ -66,13 +66,38 @@ class Controller {
     retreat_dir_ = 0;
     retreat_left_mm_ = 0.0f;
     home_phase_ = HomePhase::Init;
-    if (cal_ && cal_->homed) {
-      // Resume from the stored datum so a power cut mid-travel does not
-      // forget the height it was at; still re-home if the profile changed.
-      cmd_mm_[0] = cal_->home_mm;
-      cmd_steps_[0] = 0;
+    // --- boot-trust policy -----------------------------------------------
+    // A stored datum is only worth resuming if the machine can still check it.
+    //
+    // With feedback: resume from last_height_mm and let the integrity check
+    // falsify it within a tick if the top was moved while unpowered. A
+    // self-locking worm means exactly that: the bench can be pushed by hand
+    // with the board dead, and it is the encoder, not the EEPROM, that knows.
+    //
+    // Without feedback: nothing can ever disprove a stale height, so nothing
+    // may be believed. Drop `homed` and require a real home every power cycle.
+    // This is why the desk's own end-stops and the slow home rate exist:
+    // open-loop is a legitimate build (a geared DC motor and a limit switch
+    // still makes a fine desk) and it must be honest about what it knows.
+    if (cal_ && cal_->homed && m_->feedback == FeedbackKind::None) {
+      cal_->homed = false;
+      cal_->last_height_valid = false;
+      hal_->log("boot: open-loop machine, stored height dropped - home required");
     }
-    state_ = (cal_ && cal_->homed) ? MachineState::Ready : MachineState::Uncalibrated;
+    if (cal_ && cal_->homed) {
+      cmd_mm_[0] = cal_->last_height_valid ? cal_->last_height_mm : cal_->home_mm;
+      cmd_steps_[0] = m_->mm_to_steps(m_->axis[0], cmd_mm_[0] - cal_->home_mm);
+      // The resumed height is a *hypothesis*, not a fact: it is whatever the
+      // last run believed, and the encoder counts are relative to home, so the
+      // two are not comparable until this tick reconciles them. Trusting the
+      // hypothesis for even one tick means a soft limit could be computed from
+      // a number the very next tick calls a lie. So: adopt the encoder on the
+      // first trustworthy reading, and refuse motion until then.
+      resync_pending_ = m_->feedback != FeedbackKind::None;
+    }
+    state_ = (cal_ && cal_->homed && !resync_pending_)
+                 ? MachineState::Ready
+                 : MachineState::Uncalibrated;
     target_mm_ = cmd_mm_[0];
   }
 
@@ -199,6 +224,29 @@ class Controller {
       enc_mm_[0] = cal_->counts_to_mm(a, *m_, in.encoder_counts[0]);
       if (m_->axis_count > 1)
         enc_mm_[1] = cal_->counts_to_mm(m_->axis[1], *m_, in.encoder_counts[1]);
+    }
+
+    // --- first trusted feedback after a boot: adopt it ------------------------
+    // One-way reconciliation. The encoder is what touches the mechanism; the
+    // stored height is what a previous process remembered. If they disagree the
+    // encoder wins, the model jumps to it, and the machine becomes movable -
+    // without this the desk faults on every boot simply because its EEPROM and
+    // its encoder had no chance to agree yet.
+    if (resync_pending_ && have_enc_ && cal_->homed) {
+      cmd_mm_[0] = enc_mm_[0];
+      cmd_steps_[0] = m_->mm_to_steps(a, cmd_mm_[0] - cal_->home_mm);
+      step_carry_ = 0.0;
+      target_mm_ = cmd_mm_[0];
+      vel_mm_s_ = 0.0f;
+      resync_pending_ = false;
+      state_ = MachineState::Ready;
+      // Not a fault, but worth saying out loud: if the two disagreed, the top
+      // moved while the board was unpowered. On a workbench that usually means
+      // something was resting on it, and the operator is about to call a
+      // preset computed from where they *think* the desk is.
+      const mm_t drift = cmd_mm_[0] - cal_->last_height_mm;
+      if (cal_->last_height_valid && std::fabs(drift) > m_->safety.position_loss_mm)
+        hal_->log("boot: height changed while unpowered, using encoder");
     }
 
     // --- integrity: parked but reality disagrees => someone moved the top ---
@@ -334,6 +382,7 @@ class Controller {
       cmd_mm_[0] = target_mm_;
       cmd_ = Command::Stop;
       state_ = MachineState::Ready;
+      persist_height();
       sup_.begin_stop_verification(now);
       // Hold at reduced current: enough to stop creep on a loaded single-shaft
       // bench, without the heat of full run current parked for hours.
@@ -379,6 +428,19 @@ class Controller {
 
  private:
   enum class HomePhase : u8 { Init, Backoff, Search, Done };
+
+  // Update the in-RAM datum; the caller decides when to pay for an NVS write.
+  // Only ever records a settled height, so a crash mid-move leaves the last
+  // known-good height rather than somewhere inside a ramp.
+  void persist_height() {
+    if (!cal_) return;
+    const mm_t h = cmd_mm_[0];
+    if (cal_->last_height_valid && std::fabs(h - cal_->last_height_mm) < 0.25f)
+      return;                        // unchanged: no flash wear, no write
+    cal_->last_height_mm = h;
+    cal_->last_height_valid = true;
+    hal_->nv_write(NvsKey::kNvsCalibration, cal_, sizeof(Calibration));
+  }
 
   static rate_t approach(rate_t v, rate_t goal, rate_t slew_per_s, float dt) {
     const float d = slew_per_s * dt;
@@ -503,6 +565,7 @@ class Controller {
           cal_->home_steps = 0;
           cal_->homed = true;
           if (have_enc_) cal_->home_counts = in.encoder_counts[0];
+          persist_height();
           hal_->nv_write(NvsKey::kNvsCalibration, cal_, sizeof(Calibration));
           target_mm_ = cmd_mm_[0];
           cmd_ = Command::Stop;
@@ -632,6 +695,7 @@ class Controller {
   bool hold_current_ = false;
   bool have_enc_ = false;
   bool was_low_ = false;
+  bool resync_pending_ = false;   // model awaiting first encoder reconciliation
   int  log_burst_ = 0;  // reserved for rate-limited logging
 
   steps_t cmd_steps_[kMaxAxis] = {};

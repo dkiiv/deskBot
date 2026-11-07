@@ -480,6 +480,98 @@ int main() {
     CHECK(travel < 400.0f, "grinded %.0f mm into the obstruction", travel);
   }
 
+  // ------------------------------------------------ power-cycle trust policy
+  // What a reboot is allowed to believe. Two bugs lived here: init() resumed
+  // claiming cal_->home_mm (the LOW datum, i.e. the bottom of travel) as the
+  // current height, and it did so even on a machine with no feedback, where
+  // nothing can ever disprove it. On a self-locking bench the top can be moved
+  // by hand while the board is unpowered, so an open-loop desk must boot
+  // Uncalibrated and home, every time.
+  g_group = "boot-trust";
+  {
+    // (a) open-loop: stored calibration must NOT survive as a trusted height.
+    MachineProfile ol = husky();
+    ol.feedback = FeedbackKind::None;
+    {
+      FakeBench b; b.setup(ol);
+      b.cal.homed = true;
+      b.cal.home_mm = b.machine.axis[0].travel_low_mm;
+      b.cal.last_height_valid = true;
+      b.cal.last_height_mm = 830.0f;
+      FakeBench reboot; reboot.setup(ol);
+      reboot.cal = b.cal;             // exactly what came back out of NVS
+      reboot.ctl.init(&reboot, {&reboot.machine, &reboot.cal});
+      CHECK(reboot.ctl.state() == MachineState::Uncalibrated,
+            "open-loop desk booted trusting a height it cannot verify (state=%s)",
+            name(reboot.ctl.state()));
+      CHECK(reboot.ctl.move_to(900.0f) == Status::NotCalibrated,
+            "open-loop desk accepted a move straight after boot");
+      CHECK(std::fabs(reboot.last_rate_steps_s) < 0.5f,
+            "open-loop desk pulsed before ever homing");
+    }
+
+    // (b) with feedback: resuming is allowed, because the integrity check can
+    // falsify the stored value within a tick.
+    {
+      FakeBench b; b.setup(husky());
+      b.true_mm = 900.0f;
+      home_it(b, 900.0f);
+      const mm_t hi = b.machine.axis[0].travel_high_mm - 30.0f;
+      CHECK(b.ctl.move_to(hi) == Status::Ok, "move rejected");
+      b.run(120ULL * 1000000ULL);
+      CHECK(b.ctl.state() == MachineState::Ready, "did not settle");
+      Calibration saved = b.cal;      // NVS image at power-down
+
+      // Honest resume: encoder agrees with the stored height.
+      FakeBench r1; r1.setup(husky());
+      r1.teleport(b.true_mm); r1.cal = saved;
+      r1.ctl.init(&r1, {&r1.machine, &r1.cal});
+      r1.run(50 * 1000);
+      CHECK(r1.ctl.state() != MachineState::Fault,
+            "honest resume was faulted (state=%s)", name(r1.ctl.state()));
+      CHECK(r1.ctl.faults().position_lost == false, "false position_lost on resume");
+      CHECK(r1.ctl.move_to(r1.machine.axis[0].travel_low_mm + 50.0f) == Status::Ok,
+            "could not move after an honest resume");
+
+      // Dishonest resume: the top was moved while unpowered. Correct
+      // behaviour is to HEAL, not to fault: the encoder is what touches the
+      // mechanism, so adopting it leaves the machine accurately positioned and
+      // safe to move. Faulting instead would refuse a desk that demonstrably
+      // knows where it is, purely because a stale EEPROM value disagreed.
+      FakeBench r2; r2.setup(husky());
+      r2.teleport(b.true_mm - 60.0f);   // leaned on: 60 mm off
+      r2.cal = saved;
+      r2.ctl.init(&r2, {&r2.machine, &r2.cal});
+      r2.run(50 * 1000);
+      CHECK(std::fabs(r2.ctl.height_mm() - r2.true_mm) < 1.5f,
+            "model resumed the stale height instead of the encoder: %.1f vs %.1f",
+            r2.ctl.height_mm(), r2.true_mm);
+      CHECK(!r2.ctl.faults().position_lost, "healed boot should not be faulted");
+      CHECK(r2.ctl.move_to(r2.true_mm + 30.0f) == Status::Ok,
+            "would not move after healing the stale height");
+      r2.run(60ULL * 1000000ULL);
+      CHECK(std::fabs(r2.true_mm - (b.true_mm - 30.0f)) < 2.0f,
+            "post-heal move landed at %.1f", r2.true_mm);
+    }
+
+    // (c) the persisted height must be the LAST height, not the home datum.
+    {
+      FakeBench b; b.setup(husky());
+      b.true_mm = 900.0f;
+      home_it(b, 900.0f);
+      const mm_t hi = b.machine.axis[0].travel_high_mm - 20.0f;
+      CHECK(b.ctl.move_to(hi) == Status::Ok, "move rejected");
+      b.run(120ULL * 1000000ULL);
+      CHECK(b.cal.last_height_valid, "settled height was never recorded");
+      CHECK(std::fabs(b.cal.last_height_mm - hi) < 2.0f,
+            "persisted %.1f mm but the desk is at %.1f mm",
+            b.cal.last_height_mm, hi);
+      CHECK(b.cal.home_mm < b.cal.last_height_mm - 100.0f,
+            "last height looks like the home datum (%.1f vs %.1f)",
+            b.cal.last_height_mm, b.cal.home_mm);
+    }
+  }
+
   std::printf("\n%d checks passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }

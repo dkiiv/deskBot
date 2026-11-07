@@ -33,6 +33,14 @@ struct Calibration {
   steps_t home_steps = 0;
   bool    homed = false;
 
+  // Last height the machine believed, written when a move settles. Distinct
+  // from home_mm: home_mm is the DATUM (bottom of travel) and last_height_mm
+  // is where the top actually was. Resuming a boot from home_mm instead puts
+  // the model at the bottom of travel no matter where the desk really is, and
+  // every soft limit is then computed from a fiction.
+  mm_t  last_height_mm = 0.0f;
+  bool  last_height_valid = false;
+
   // Ruler-entered anchors: at two known heights, the encoder counts seen.
   // Scaling error is then measurable rather than assumed away.
   mm_t ref_low_mm = 0.0f;  i64 ref_low_counts = 0;

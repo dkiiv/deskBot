@@ -16,7 +16,7 @@ Arduino, ESP-IDF, or FreeRTOS includes anywhere in it.
 home, a hand-pushed top, a dropped Wi-Fi client mid-descent — cannot be
 reproduced on demand on hardware, and must not be discovered on hardware at all.
 A host-compiled core means every one of them is a 30-second deterministic test.
-103 checks currently run in under two seconds with no hardware present.
+141 checks currently run in under two seconds with no hardware present.
 
 **Cost.** A HAL interface with seven methods instead of direct register pokes,
 and a fake desk that is more work to write than a test harness. The fake desk has
@@ -141,6 +141,39 @@ driver chosen in the PCB spec.
 NEMA 17 data, not to the motor you will buy. It is a comparison tool for choosing
 a frame size and a supply voltage. The datasheet plot of the actual motor is the
 last word, and the script says so in its own docstring.
+
+---
+
+## A reboot may only believe what it can still check
+
+**Chosen.** On boot with feedback: resume the stored height as a *hypothesis*,
+adopt the encoder on the first trustworthy reading, and refuse motion until that
+reconciliation has happened. On boot with `FeedbackKind::None`: drop `homed`
+entirely and require a home every power cycle.
+
+**Why.** `init()` originally resumed from `cal_->home_mm` — which is the
+*datum* (bottom of travel), not the last height. Any power cut mid-travel woke
+the desk claiming to be at its lowest point, so every soft limit was computed
+from a fiction. Separately, resuming at all was wrong on an open-loop machine:
+a self-locking worm can be pushed by hand with the board unpowered, and nothing
+in an open-loop build can ever disprove a stale EEPROM value.
+
+Found by the firmware workstream's design note, not by me — both were my bugs.
+
+**The interesting part: a stale height should HEAL, not FAULT.** The first test
+asserted that a desk whose stored height the encoder contradicts must latch
+`position_lost`. That was wrong. The encoder is what touches the mechanism; the
+stored value is what a previous process remembered. Adopting the encoder leaves
+the machine accurately positioned and safe, so faulting it would refuse a desk
+that demonstrably knows where it is, purely because a stale number disagreed.
+The rule is "refuse to move when you do not know where you are" — after
+reconciliation it does know. The log line exists because a large discrepancy
+means something was resting on the top, and the operator is about to call a
+preset computed from where they *think* the desk is.
+
+**Cost.** An open-loop desk is now more annoying: it homes on every power cycle
+(~2 min at the low end). That is the honest price of having no way to know, and
+it is why the encoder is worth the $3 in the PCB spec.
 
 ---
 

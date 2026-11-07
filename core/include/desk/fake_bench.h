@@ -164,6 +164,18 @@ class FakeBench : public Hal {
     true_counts = counts_for_(true_mm);
   }
 
+  // Move the mechanism to an absolute height while keeping every piece of
+  // simulated truth consistent. Assigning true_mm directly leaves the encoder
+  // counts describing the OLD position, so the first tick after a teleport
+  // reads a height the bench is not at - which looks exactly like a controller
+  // bug and is only a test bug. Use this for power-cycle scenarios.
+  void teleport(mm_t mm) {
+    true_mm = mm;
+    true_mm_b = mm;
+    true_counts = counts_for_(mm);
+    microstep_acc_ = 0.0;
+  }
+
   // Human shoves the top: no motor involved, position silently wrong.
   void push_by_hand(mm_t delta_mm) {
     true_mm += delta_mm;

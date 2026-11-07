@@ -20,7 +20,7 @@ docs/          handoff specs for the print and PCB workstreams
 
 | Area | State |
 |---|---|
-| Core motion + safety library | **done, 121 host checks passing** |
+| Core motion + safety library | **done, 141 host checks passing** |
 | Simulator + machine-profile loader | **done** |
 | Husky machine profile | numbers present, **three must be measured** |
 | Motor/gearbox sizing model | `scripts/sizing.py`, validated against published desk speeds |
@@ -84,7 +84,7 @@ built, including gear slop, rather than the mechanism as modelled.
 No hardware needed:
 
 ```sh
-make test          # 121 behaviour checks against a fake bench
+make test          # 141 behaviour checks against a fake bench
 python3 scripts/sizing.py --load-kg 50   # can it actually be fast enough?
 make run           # simulate the Husky profile end to end
 
