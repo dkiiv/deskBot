@@ -35,9 +35,16 @@ jobs:
   firmware:
     name: Firmware builds for ESP32-S3
     runs-on: ubuntu-latest
-    container:
-      image: platformio/platformio-core:latest
     steps:
       - uses: actions/checkout@v4
-      - name: pio run (platform + board pinned in firmware/platformio.ini)
+      # platformio via pip, no container: the platformio-core image failed
+      # "Initialize containers" on the first try, and the platform/board are
+      # pinned in platformio.ini anyway, so a pip install is just as
+      # reproducible without depending on an image registry.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: pio run
         run: cd firmware && pio run -e esp32s3
