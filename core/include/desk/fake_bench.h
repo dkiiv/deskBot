@@ -12,7 +12,9 @@
 // which is the entire point: a controller that only ever reads its own model
 // cannot fail, and therefore tests nothing.
 #pragma once
+#include <cmath>
 #include <cstring>
+
 #include "desk/controller.h"
 
 namespace desk {

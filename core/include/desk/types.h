@@ -2,6 +2,7 @@
 // No Arduino/ESP-IDF includes in core/: everything here must compile with a
 // host compiler so it can be unit-tested without hardware.
 #pragma once
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>

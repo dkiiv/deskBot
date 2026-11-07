@@ -5,6 +5,9 @@
 // talking to a Husky work bench, an IKEA SKARSTA, or a two-motor office desk.
 // A new desk is a JSON file (see machines/<name>.machine.json) plus a mount.
 #pragma once
+#include <cmath>
+#include <limits>
+
 #include "desk/types.h"
 
 namespace desk {

@@ -6,6 +6,8 @@
 // slips, a binding spot, and a heavy top. Keep every method here something a
 // bare-metal board can implement.
 #pragma once
+#include <cstring>
+
 #include "desk/machine_profile.h"
 
 namespace desk {
