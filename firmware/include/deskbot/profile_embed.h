@@ -1,6 +1,6 @@
 // deskbot firmware - MachineProfile loader for the embedded JSON DOM.
 //
-// Firmware twin of cli/include/deskbot/profile_loader.h. Keys, defaults and
+// Firmware twin of tests/include/deskbot/profile_loader.h. Keys, defaults and
 // validation order mirror the host loader exactly; where they differ this file
 // says so in a comment. A difference in defaults between the two loaders is a
 // firmware-vs-simulator behaviour bug that only shows up on the real machine,

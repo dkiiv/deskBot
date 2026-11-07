@@ -7,13 +7,20 @@ The motion and safety logic is a platform-independent C++17 library, compiled on
 your laptop and driven against a fake bench before anything is printed, soldered
 or plugged in. A specific desk is one JSON file plus some printed plastic.
 
+[![CI](https://github.com/dkiiv/deskBot/actions/workflows/ci.yml/badge.svg)](https://github.com/dkiiv/deskBot/actions/workflows/ci.yml)
+
+**Agents and humans new here: read [AGENTS.md](AGENTS.md) first** — lanes,
+rules, what's left. The map below is just the directories.
+
 ```
 core/          motion planner, stall detection, homing, presets  <- generic
 machines/      one .machine.json per desk                         <- the seam
-cli/           host simulator: run the real controller, no hardware
-firmware/          ESP32 firmware — not yet written
-husky-bench/   prints, wiring, build guide for the specific bench
-docs/          handoff specs for the print and PCB workstreams
+firmware/      ESP32-S3 firmware (PlatformIO) — compiles, unflashed
+tests/         host suites: core/ firmware/ sim/ (+ include/ for sim helpers)
+scripts/       calibrate.py (measure your desk), sizing.py (motor math)
+husky-bench/   (planned) prints + build guide for the specific bench
+docs/          decisions, handoff specs, config plans
+.github/       CI: make test + gen-header sync + sim run + pio build
 ```
 
 ## Status
@@ -21,7 +28,8 @@ docs/          handoff specs for the print and PCB workstreams
 | Area | State |
 |---|---|
 | Core motion + safety library | **done, 141 host checks passing** |
-| Simulator + machine-profile loader | **done** |
+| Simulator + machine-profile loader | **done** (`tests/sim`, `make run`) |
+| CI (host tests, header sync, firmware build) | **done** — `.github/workflows/ci.yml` |
 | Husky machine profile | numbers present, **three must be measured** |
 | Motor/gearbox sizing model | `scripts/sizing.py`, validated against published desk speeds |
 | ESP32 firmware | compiling scaffold, no hardware yet — `firmware/` |
@@ -115,7 +123,7 @@ matters:
 - `"independent"` — two motors, no levelness requirement.
 
 A second machine is validated in CI by the dual-leg test in
-`core/test/test_core.cpp`, which uses a sticky leg to prove the equaliser is
+`tests/core/test_core.cpp`, which uses a sticky leg to prove the equaliser is
 doing real work rather than getting lucky.
 
 ## Layout

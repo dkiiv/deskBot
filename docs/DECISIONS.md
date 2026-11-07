@@ -33,7 +33,7 @@ already paid for itself twice (below).
 mechanical desk, with only the prints being bench-specific. That is only true if
 "new desk" means "new JSON", not "new fork".
 
-**Payoff already realised:** the dual-leg desk test in `core/test/test_core.cpp`
+**Payoff already realised:** the dual-leg desk test in `tests/core/test_core.cpp`
 exercises `AxisCoupling::MasterFollower` on the identical controller object the
 single-shaft tests use. That is the generic claim being checked, not asserted.
 

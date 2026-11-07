@@ -1,0 +1,43 @@
+name: CI
+
+# Everything here must also pass on a laptop: `make test`, `make run`,
+# `cd firmware && pio run`. No hardware exists in CI, and that is the point —
+# the whole reason the core is host-compilable is that its safety logic gets
+# proven without a desk attached.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host:
+    name: Host tests + simulation (core, firmware logic, sim)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run both host suites + profile validation
+        run: make test
+
+      - name: Firmware generated header is in sync with its machine JSON
+        # The firmware embeds the machine profile as a generated header; this
+        # catches a profile edit that forgot to regenerate it.
+        run: |
+          python3 firmware/scripts/gen_machine_header.py machines/husky-46x24.machine.json
+          git diff --exit-code firmware/include/generated/machine_profile_json.h \
+            || { echo "::error machine_profile_json.h is stale: run firmware/scripts/gen_machine_header.py and commit the result"; exit 1; }
+
+      - name: End-to-end simulation (home + full travel, fault-free exit)
+        run: make run
+
+  firmware:
+    name: Firmware builds for ESP32-S3
+    runs-on: ubuntu-latest
+    container:
+      image: platformio/platformio-core:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: pio run (platform + board pinned in firmware/platformio.ini)
+        run: cd firmware && pio run -e esp32s3

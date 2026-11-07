@@ -8,7 +8,7 @@
 //
 // Build + run (from firmware/):
 //   g++ -std=c++17 -Wall -Wextra -fsanitize=undefined,address
-//       -Iinclude -I../core/include test/firmware_host_tests.cpp -o /tmp/fwtest && /tmp/fwtest
+//       -Iinclude -I../core/include tests/firmware/firmware_host_tests.cpp -o /tmp/fwtest && /tmp/fwtest
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -134,7 +134,7 @@ static void test_loader_matches_host_defaults() {
   MachineProfile m;
   const char* err = nullptr;
   // A minimal profile: everything optional must take the documented default
-  // (mirrors cli/include/deskbot/profile_loader.h).
+  // (mirrors tests/include/deskbot/profile_loader.h).
   const char* min =
       R"({"identity":{"name":"t","profile_version":2},
           "axes":[{"steps_per_motor_rev":3200,"gear_ratio":5.0,"mm_per_shaft_rev":5.5,

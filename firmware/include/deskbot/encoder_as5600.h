@@ -148,7 +148,7 @@ struct AngleUnwrap {
 // (say a 10-bit AS5048 at 1024) would quantise the other way: the profile
 // could not be more precise than the sensor, and encoder_counts_per_motor_rev
 // should then equal the raw resolution to keep the mapping 1:1. See
-// DESIGN-NOTES.md.
+// docs/firmware-design-notes.md.
 class As5600Track {
  public:
   void configure(int32_t counts_per_motor_rev) {

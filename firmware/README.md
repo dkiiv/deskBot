@@ -37,14 +37,14 @@ python step, and a stale copy cannot pass silently — the host test below
 recompiles the embedded text and checks every number against the declared
 profile, and the boot log prints name/version so a mismatch is visible.
 The parser (`include/deskbot/json_embed.h`, `profile_embed.h`) is a
-no-std, no-allocation, no-exception twin of `cli/include/deskbot/` with the
+no-std, no-allocation, no-exception twin of `tests/include/deskbot/` with the
 same keys, defaults and validation.
 
 ### Host tests (firmware-only logic, no hardware)
 
 ```sh
 g++ -std=c++17 -Wall -Wextra -fsanitize=undefined,address \
-    -Iinclude -I../core/include test/firmware_host_tests.cpp -o /tmp/fwtest && /tmp/fwtest
+    -Iinclude -I../core/include tests/firmware/firmware_host_tests.cpp -o /tmp/fwtest && /tmp/fwtest
 ```
 
 91 334 checks: JSON parse/load integrity (including the nested-lookup class

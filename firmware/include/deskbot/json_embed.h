@@ -1,6 +1,6 @@
 // deskbot firmware - embedded machine-profile JSON.
 //
-// This is the firmware twin of cli/include/deskbot/{json_mini.h,profile_loader.h}.
+// This is the firmware twin of tests/include/deskbot/{json_mini.h,profile_loader.h}.
 // It is deliberately NOT a copy of them: json_mini.h is built on std::string,
 // std::map and std::vector and allocates, and profile_loader.h calls strdup()
 // and std::to_string(). All of that is fine on a host and wasteful-to-fragile
@@ -12,7 +12,7 @@
 //     about what a profile means.
 //
 // If you change a key or a default here, change profile_loader.h too (and note
-// it in DESIGN-NOTES.md): a silently diverging default shows up as a desk that
+// it in docs/firmware-design-notes.md): a silently diverging default shows up as a desk that
 // stops at a different height than the simulator says it will.
 //
 // Tree edges are stored in the nodes themselves (first_child / last_child /

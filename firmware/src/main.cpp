@@ -11,7 +11,7 @@
 //                  draining the HAL log ring
 //
 // Nothing in core/ is modified. If something below looks like it compensates
-// for core behaviour, it is written up in DESIGN-NOTES.md instead of patched.
+// for core behaviour, it is written up in docs/firmware-design-notes.md instead of patched.
 //
 // Safety stance (read before touching):
 //   * Every stub is marked `// STUB:` and listed in README.md. No stub
@@ -820,7 +820,7 @@ void apply_cmd(const Cmd& c) {
       // homing as the sanctioned recovery: it clears only position_lost and
       // skew, and still refuses while estop/over_temp/stall/home_timeout are
       // latched. That policy belongs in core/ and is covered by the
-      // home-recovery tests in core/test/test_core.cpp.
+      // home-recovery tests in tests/core/test_core.cpp.
       s = g_ctrl.home();
       ring_log("cmd home -> %s", name(s));
       break;
@@ -1072,7 +1072,7 @@ void setup() {
     // Controller::init() resumes cal.home_mm after a power cycle. With no
     // encoder nothing can disprove the stored datum - the top could have been
     // moved by hand while powered off - so belt-and-braces: make an open-loop
-    // machine re-home every boot. (Documented in DESIGN-NOTES.md.)
+    // machine re-home every boot. (Documented in docs/firmware-design-notes.md.)
     Serial.println("feedback=none: clearing stored homing (cannot verify)");
     g_cal = Calibration{};
   }
