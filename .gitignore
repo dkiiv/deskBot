@@ -1,0 +1,12 @@
+build/
+*.o
+*.stl
+*.step
+__pycache__/
+*.pyc
+.pio/
+.venv*/
+compile_commands.json
+fab/
+erc.rpt
+drc.rpt
