@@ -138,10 +138,6 @@ class Supervisor {
     }
     if (f.over_temp && in.driver_temp_c <= m.safety.temp_c_reenter) f.over_temp = false;
 
-    // --- hard limits are normal travel endpoints: Protect, not Fault ----------
-    if (in.limit_low[0])  { f.limit_low  = true; return Status::LimitLow; }
-    if (in.limit_high[0]) { f.limit_high = true; return Status::LimitHigh; }
-    f.limit_low = f.limit_high = false;
 
     // --- position coherence -----------------------------------------------------
     // This detector answers "did the mechanism follow the command?", which is
@@ -174,6 +170,18 @@ class Supervisor {
     if (verifying_stop_ && now_us > verify_until_us_) verifying_stop_ = false;
     if (!driving) lag_us_ = 0;
 
+    // --- hard limits: evaluated LAST, after stall and skew --------------------
+    // They used to return early, which silently disabled both the stall and
+    // skew checks whenever the desk was parked on a stop - and a desk spends
+    // most of its life parked on a stop. Order by severity instead: a tilted
+    // frame against a stop is still a tilted frame.
+    auto at_limit = [&](Faults& ff, const Inputs& in) {
+      if (in.limit_low[0])  { ff.limit_low  = true; return Status::LimitLow; }
+      if (in.limit_high[0]) { ff.limit_high = true; return Status::LimitHigh; }
+      ff.limit_low = ff.limit_high = false;
+      return Status::Ok;
+    };
+
     // --- skew, only when the legs are not mechanically tied together -----------
     // Skipped while homing: each leg is independently hunting its own stop, so
     // the difference between them measures two separate hunts, not a tilted
@@ -187,7 +195,11 @@ class Supervisor {
         return Status::Skew;
       }
     }
-    return Status::Ok;
+
+    // Skew outranks a limit only as a *report*; both can be true, and the
+    // caller acts on the latches, not on this return value.
+    const Status lim = at_limit(f, in);
+    return lim != Status::Ok ? lim : Status::Ok;
   }
 
   void set_other_axis_mm(mm_t v) { enc_other_ = v; }

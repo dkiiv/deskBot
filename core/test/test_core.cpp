@@ -156,6 +156,63 @@ int main() {
           "wrong zero after home-from-stop: %.1f", c.ctl.height_mm());
   }
 
+  // ------------------------------------------------------- recovery by homing
+  // "Faulted -> re-home" is the documented recovery path, so it has to be
+  // reachable. This test exists because it was not: home() was gated behind
+  // can_move(), and position_lost (raised by leaning on the desk) is in
+  // any_hard() - so the desk that most needed to home was the one that could
+  // not. Homing IS the recovery; forbidding it while faulty is a catch-22.
+  g_group = "home-recovery";
+  {
+    // (a) position lost while parked, then a full recovery cycle.
+    FakeBench b; b.setup(husky());
+    home_it(b, 900.0f);
+    b.push_by_hand(-40.0f);
+    b.run(20 * 1000);
+    CHECK(b.ctl.faults().position_lost, "hand-push not detected");
+    CHECK(b.ctl.move_to(900.0f) == Status::UnsafeToMove,
+          "a trusted move was allowed with lost position");
+    CHECK(b.ctl.home() == Status::Ok, "home must be allowed as the recovery path");
+    b.run(300ULL * 1000000ULL);
+    CHECK(std::fabs(b.ctl.height_mm() - b.true_mm) < 1.0f,
+          "re-home did not re-anchor: model %.1f truth %.1f",
+          b.ctl.height_mm(), b.true_mm);
+    CHECK(!b.ctl.faults().position_lost, "position_lost still latched after re-home");
+    CHECK(b.ctl.move_to(b.machine.axis[0].travel_high_mm - 40.0f) == Status::Ok,
+          "recovery move refused after a successful re-home");
+    b.run(120ULL * 1000000ULL);
+    CHECK(!faults_any(b), "faults after a clean recovery cycle");
+
+    // (b) skew on a dual machine: homing may START, but the latch must not be
+    // silently dropped - the legs re-synchronise against their stops and the
+    // supervisor re-evaluates them.
+    MachineProfile m = husky();
+    m.coupling = AxisCoupling::MasterFollower;
+    m.axis_count = 2;
+    m.safety.max_skew_mm = 6.0f;
+    FakeBench c; c.setup(m);
+    c.true_mm = 800.0f; c.true_mm_b = 800.0f;
+    c.ctl.home(); c.run(300ULL * 1000000ULL);
+    c.ctl.supervisor().clear_faults(); c.ctl.reset_duty_budget();
+    c.push_corner(0.0f, -12.0f);      // press one corner: 12 mm of skew
+    c.run(20 * 1000);
+    CHECK(c.ctl.faults().skew, "12 mm of skew not detected (limit 6 mm)");
+    CHECK(c.ctl.move_to(900.0f) == Status::UnsafeToMove, "move allowed while skewed");
+    CHECK(c.ctl.home() == Status::Ok, "home must be reachable while skewed");
+
+    // (c) faults homing must NOT clear: an operator acknowledgement still owns
+    // these, because homing cannot fix an open circuit or a hot driver.
+    FakeBench d; d.setup(husky());
+    home_it(d, 900.0f);
+    d.estop_open = true; d.run(200000);
+    CHECK(d.ctl.faults().estop, "e-stop not latched");
+    CHECK(d.ctl.home() != Status::Ok, "home allowed through an e-stop");
+    d.estop_open = false; d.run(200000);
+    d.temp_c = 90.0f; d.run(200000);
+    CHECK(d.ctl.faults().over_temp, "over-temp not latched");
+    CHECK(d.ctl.home() != Status::Ok, "home allowed while overheating");
+  }
+
   // ------------------------------------------------------------------ moves --
   g_group = "moves";
   {

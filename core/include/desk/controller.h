@@ -115,10 +115,30 @@ class Controller {
     return Status::Ok;
   }
 
+  // Homing is the recovery path for a lost position model, so it must not be
+  // gated behind can_move() the way a trusted move is - that would mean a desk
+  // that lost its datum could never regain it (the latch that blocks movement
+  // is the same latch only homing can clear).
+  //
+  // The latches homing is allowed to clear on a successful anchor are exactly
+  // the ones homing can actually FIX: position_lost and skew are claims about
+  // where the mechanism is, and an anchor against a proven hard stop settles
+  // them. The rest are not, and homing cannot make them true: an e-stop chain
+  // is still open, the driver is still hot, a stalled gearbox may still be
+  // jammed, and a timeout already proved the path is blocked. Those stay
+  // latched and still refuse the home outright.
   Status home() {
     if (!m_) return Status::BadArgument;
-    if (!sup_.can_move()) return Status::UnsafeToMove;
-    if (state_ == MachineState::Moving) return Status::Busy;
+    Faults& f = sup_.faults();
+    if (f.estop || f.over_temp || f.stall || f.blocked || f.home_timeout)
+      return Status::UnsafeToMove;
+    if (state_ == MachineState::Moving || state_ == MachineState::Retreating)
+      return Status::Busy;
+    // Recovery latches are dropped only for the duration of the hunt: the
+    // supervisor re-evaluates both from live feedback, and if the machine
+    // cannot actually re-synchronise the fault simply returns.
+    f.position_lost = false;
+    f.skew = false;
     cmd_ = Command::Home;
     home_phase_ = HomePhase::Init;
     home_deadline_us_ = 0;
