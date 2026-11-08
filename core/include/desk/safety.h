@@ -183,9 +183,15 @@ class Supervisor {
     // skew checks whenever the desk was parked on a stop - and a desk spends
     // most of its life parked on a stop. Order by severity instead: a tilted
     // frame against a stop is still a tilted frame.
-    auto at_limit = [&](Faults& ff, const Inputs& in) {
-      if (in.limit_low[0])  { ff.limit_low  = true; return Status::LimitLow; }
-      if (in.limit_high[0]) { ff.limit_high = true; return Status::LimitHigh; }
+    // `li` not `in`: the outer tick() parameter is also named `in`, and GCC's
+    // -Wshadow (which -Werror turns into a build error) is right that shadowing
+    // it inside the very lambda that is called with it invites reading the
+    // wrong one. The lambda captures by reference anyway, so the parameter is
+    // the same object either way - which is exactly why the shadow is invisible
+    // to the eye and a compiler flag is the only thing that will ever see it.
+    auto at_limit = [&](Faults& ff, const Inputs& li) {
+      if (li.limit_low[0])  { ff.limit_low  = true; return Status::LimitLow; }
+      if (li.limit_high[0]) { ff.limit_high = true; return Status::LimitHigh; }
       ff.limit_low = ff.limit_high = false;
       return Status::Ok;
     };
