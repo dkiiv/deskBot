@@ -17,6 +17,7 @@
 #include "deskbot/encoder_as5600.h"
 #include "deskbot/json_embed.h"
 #include "deskbot/profile_embed.h"
+#include "deskbot/tick_guard.h"
 #include "generated/machine_profile_json.h"
 
 static int g_fail = 0;
@@ -347,6 +348,56 @@ static void test_track_scaling_and_sign() {
   CHECK(start - counts >= 200);   // 500 raw counts * 2000/4096 ~= 244
 }
 
+// ------------------------------------------------------------------ tick guard
+// ESPHal must touch hardware at most once per control period, because
+// control_task reads inputs twice per period (once inside Controller::tick,
+// once for button policy) and both must see the same snapshot. This test exists
+// because the guard was once `tick_ == cache_tick_` with cache_tick_ never
+// assigned: the comparison was always false, so the AS5600 was read twice per
+// 2 ms tick. A firmware build cannot catch that (it compiles fine) and no host
+// test covered it (it is firmware plumbing, not firmware logic) - which is the
+// entire reason the counter pair lives in its own header.
+static void test_tick_guard_one_sample_per_period() {
+  deskbot::TickGuard g;
+  // Before any period begins there is nothing to sample and the guard fails
+  // closed: it reports "already sampled" so the HAL serves its cache instead of
+  // touching the bus outside a control period. See tick_guard.h.
+  CHECK(g.already_sampled());
+  CHECK(g.tick() == 0);
+
+  // The control_task pattern: begin, then two readers in the same period.
+  int hw_reads = 0;
+  for (int period = 0; period < 5; ++period) {
+    g.begin();
+    for (int reader = 0; reader < 2; ++reader) {
+      if (!g.already_sampled()) { g.mark_sampled(); ++hw_reads; }
+    }
+  }
+  CHECK(hw_reads == 5);                 // one hardware read per period, not two
+  CHECK(g.tick() == 5);
+
+  // The first period after boot must sample. An off-by-one here (a sentinel
+  // equal to the first tick number) makes the desk blind to its own encoder
+  // until the second period, which on a real bench means the first tick after
+  // power-on runs with encoder_valid=false.
+  deskbot::TickGuard fresh;
+  fresh.begin();
+  CHECK(!fresh.already_sampled());
+  fresh.mark_sampled();
+  CHECK(fresh.already_sampled());
+
+  // No long-run drift into "permanently already sampled".
+  deskbot::TickGuard long_run;
+  int reads = 0;
+  for (int period = 0; period < 10000; ++period) {
+    long_run.begin();
+    if (!long_run.already_sampled()) { long_run.mark_sampled(); ++reads; }
+    (void)long_run.already_sampled();   // the second reader this period
+  }
+  CHECK(reads == 10000);
+}
+
+
 // ----------------------------------------------------- rate sign convention
 // The sign convention the HAL must honour: core passes mm_to_steps(direction,
 // mm), so a positive drive_rate() is the direction the profile calls "up".
@@ -380,6 +431,7 @@ int main() {
   test_unwrap_rejects_half_turn_ambiguity();
   test_glitch_does_not_shift_datum();
   test_track_scaling_and_sign();
+  test_tick_guard_one_sample_per_period();
   test_sign_convention_helper();
 
   std::printf("\n%d checks passed, %d failed\n", g_pass, g_fail);

@@ -41,6 +41,7 @@
 #include "deskbot/encoder_as5600.h"
 #include "deskbot/json_embed.h"
 #include "deskbot/profile_embed.h"
+#include "deskbot/tick_guard.h"
 #include "generated/machine_profile_json.h"
 
 // core/ aliases its integer types inside desk:: (u8, u32, us_t...) and keeps
@@ -393,15 +394,19 @@ class ESPHal final : public desk::Hal {
   // ------------------------------------------------------------- desk::Hal
   us_t now_us() const override { return static_cast<us_t>(esp_timer_get_time()); }
 
-  // The control task bumps the tick number once per loop, before tick().
-  // read_inputs() samples hardware at most once per tick: a second caller in
-  // the same tick gets the same snapshot, which matters because the encoder
-  // unwrap must advance exactly once per control period and I2C is the most
-  // expensive thing in the loop.
-  void begin_tick() { ++tick_; }
+  // The control task calls begin_tick() once per 2 ms period, before tick().
+  // read_inputs() then samples hardware at most once per period: a second
+  // caller in the same period gets the cached snapshot. That matters because
+  // the encoder unwrap must advance exactly once per control period (its
+  // plausibility bound is counts-per-period) and I2C is the most expensive
+  // thing in the loop. The counter pair lives in deskbot/tick_guard.h so the
+  // invariant is host-tested; it used to be two bare members here, one of which
+  // (cache_tick_) was never assigned, so the guard never engaged and the
+  // encoder was read twice per tick. See that header for the full story.
+  void begin_tick() { guard_.begin(); }
 
   void read_inputs(Inputs& out) override {
-    if (tick_ == cache_tick_) {   // already sampled this period
+    if (guard_.already_sampled()) {   // already sampled this period
       out = same_tick_copy_;
       return;
     }
@@ -467,7 +472,12 @@ class ESPHal final : public desk::Hal {
     in.encoder_valid = enc_ok;
     last_enc_ok_ = enc_ok;
 
+    // publish() fills same_tick_copy_, so from this line the period's snapshot
+    // exists and a second caller can be served it. Marking before publish would
+    // let the second reader see a stale cache; marking after out = in would work
+    // but reads like the copy is the trigger. It is the publish.
     publish(in);
+    guard_.mark_sampled();
     out = in;
   }
 
@@ -692,11 +702,10 @@ class ESPHal final : public desk::Hal {
   DebouncedPin lim_high_[kMaxAxis];
   DebouncedPin btn_up_, btn_down_, btn_stop_;
   deskbot::As5600Track enc_track_[kMaxAxis];
-  // Input snapshot state. tick_/cache_tick_ give "sample once per control
-  // period"; seq_/buf_ give a lock-free, torn-read-free handoff to the status
-  // task (see publish()/snapshot()).
-  uint32_t tick_ = 0;
-  uint32_t cache_tick_ = 0;
+  // Input snapshot state. guard_ gives "sample once per control period" (see
+  // deskbot/tick_guard.h); seq_/buf_ give a lock-free, torn-read-free handoff to
+  // the status task (see publish()/snapshot()).
+  deskbot::TickGuard guard_;
   Inputs same_tick_copy_{};
   volatile uint32_t seq_ = 0;
   Inputs buf_[2] = {};
@@ -1068,14 +1077,15 @@ void setup() {
                  "verify driver microstep setting matches profile "
                  "steps_per_motor_rev before loading the mechanism!");
 
-  if (g_profile.feedback == FeedbackKind::None && g_cal.homed) {
-    // Controller::init() resumes cal.home_mm after a power cycle. With no
-    // encoder nothing can disprove the stored datum - the top could have been
-    // moved by hand while powered off - so belt-and-braces: make an open-loop
-    // machine re-home every boot. (Documented in docs/firmware-design-notes.md.)
-    Serial.println("feedback=none: clearing stored homing (cannot verify)");
-    g_cal = Calibration{};
-  }
+  // No open-loop workaround here. This used to drop g_cal when
+  // feedback==None && homed, because an open-loop machine cannot disprove a
+  // stale stored datum (the top can be pushed by hand while powered off).
+  // Controller::init() now applies exactly that policy itself - it clears
+  // homed/last_height_valid and logs "stored height dropped - home required" -
+  // so the decision lives in one place. A frontend re-implementing core safety
+  // policy is the failure mode docs/firmware-design-notes.md concern #2 was
+  // raised about; the fix landed in core, so the copy is deleted, not kept
+  // "belt-and-braces".
 
   Controller::Config cfg;
   cfg.machine = &g_profile;
