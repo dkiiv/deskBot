@@ -1,5 +1,7 @@
 build/
+build-san/
 *.o
+.DS_Store
 *.stl
 *.step
 __pycache__/

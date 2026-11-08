@@ -21,6 +21,15 @@ jobs:
       - name: Build and run both host suites + profile validation
         run: make test
 
+      # Rebuilds the same two suites under ASan+UBSan. The fragile code is
+      # hand-written parsing over fixed pools plus integer unwrap arithmetic -
+      # exactly what these tools are for - and the firmware README had been
+      # documenting this command for a while without anything running it.
+      # Verified locally under clang; CI runs it under gcc, so a compiler-
+      # specific complaint here is possible and worth hearing about.
+      - name: Host suites under AddressSanitizer + UBSan
+        run: make test-asan
+
       - name: Firmware generated header is in sync with its machine JSON
         # The firmware embeds the machine profile as a generated header; this
         # catches a profile edit that forgot to regenerate it.
@@ -31,6 +40,13 @@ jobs:
 
       - name: End-to-end simulation (home + full travel, fault-free exit)
         run: make run
+
+      # The safety half of the gate. `make run` only proves the happy path is
+      # clean; this injects hazards and asserts that the specific latch named
+      # by each scenario is the one that trips. Asserting on the fault *name*
+      # rather than the exit code is load-bearing - see tests/run_scenarios.sh.
+      - name: Fault-injection scenarios (stall, blocked home)
+        run: make scenarios
 
   firmware:
     name: Firmware builds for ESP32-S3
