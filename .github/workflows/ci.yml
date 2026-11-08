@@ -27,8 +27,17 @@ jobs:
       # documenting this command for a while without anything running it.
       # Verified locally under clang; CI runs it under gcc, so a compiler-
       # specific complaint here is possible and worth hearing about.
-      - name: Host suites under AddressSanitizer + UBSan
-        run: make test-asan
+      #
+      # Two steps, not one: when this failed, the single combined step could
+      # not say *which* suite died, and the raw log needs repo-admin rights to
+      # read. `timeout` bounds the blast radius - the sanitizer runtime has a
+      # known hang on one platform (Apple clang, see Makefile note), and a
+      # hung test must fail the job in minutes, not after the 6 h runner limit.
+      - name: Host suites under AddressSanitizer + UBSan (core)
+        run: timeout 300 make test-core-asan
+
+      - name: Host suites under AddressSanitizer + UBSan (firmware)
+        run: timeout 300 make test-firmware-asan
 
       - name: Firmware generated header is in sync with its machine JSON
         # The firmware embeds the machine profile as a generated header; this
