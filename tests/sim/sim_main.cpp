@@ -126,14 +126,33 @@ int main(int argc, char** argv) {
   std::printf("\nstart: %.1f mm (uncalibrated, like powering up a real desk)\n\n",
               b.true_mm);
 
+  // Every latched fault, by name, space separated ("none" when nothing is
+  // latched). Two reasons this is a function rather than inline printf args:
+  // the status line used to print only 4 of the 9 Faults bits, so a run that
+  // ended on skew, blocked or home_timeout looked fault-free on screen; and
+  // tests/run_scenarios.sh asserts on this exact spelling, because an exit code
+  // says "something was wrong" but not "the hazard I injected was detected".
+  auto fault_names = [&]() {
+    const Faults& f = b.ctl.faults();
+    std::string s;
+    auto add = [&](const char* n) { if (!s.empty()) s += ' '; s += n; };
+    if (f.stall) add("stall");
+    if (f.skew) add("skew");
+    if (f.blocked) add("blocked");
+    if (f.over_temp) add("over_temp");
+    if (f.estop) add("estop");
+    if (f.position_lost) add("position_lost");
+    if (f.home_timeout) add("home_timeout");
+    if (f.limit_low) add("limit_low");
+    if (f.limit_high) add("limit_high");
+    if (s.empty()) s = "none";
+    return s;
+  };
+
   auto status = [&](const char* tag) {
-    std::printf("%-12s h=%8.2f mm  target=%8.2f  %7.3f mm/s  %-12s%s%s%s%s\n",
+    std::printf("%-12s h=%8.2f mm  target=%8.2f  %7.3f mm/s  %-12s f=%s\n",
                 tag, b.ctl.height_mm(), b.ctl.target_mm(), b.ctl.rate_mm_s(),
-                name(b.ctl.state()),
-                b.ctl.faults().stall ? " STALL" : "",
-                b.ctl.faults().position_lost ? " LOST" : "",
-                b.ctl.faults().over_temp ? " HOT" : "",
-                b.ctl.faults().estop ? " E-STOP" : "");
+                name(b.ctl.state()), fault_names().c_str());
   };
 
   auto run_for = [&](us_t us) {
