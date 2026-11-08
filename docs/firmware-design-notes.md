@@ -1,7 +1,12 @@
 # Firmware design notes and core concerns
 
-Written against `core/` as found (unmodified, 103 checks passing). Ordered by
-how much I'd want a human to look at them.
+Written against `core/` as found at the time (unmodified, 103 checks passing
+then; 141 now). Ordered by how much I'd want a human to look at them.
+
+**Status note:** concerns 1 and 2 below were later fixed in `core/` and are kept
+here because the reasoning is the useful part. Concern 4 is not a bug, just a
+documented margin. Do not read this file as an open issue list - AGENTS.md
+"Current state" is where open work lives.
 
 ## Concerns about core/ (not edited, per instructions)
 

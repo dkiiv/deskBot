@@ -219,3 +219,58 @@ as a stall the software can act on. Putting the encoder on the output shaft
 instead is supported (`feedback.kind: shaft_encoder`) but then `gear_ratio` must
 become 1.0 in the profile, because the ratio moves from the measurement into the
 mechanism.
+
+---
+
+## The encoder is sampled exactly once per control period, and that is a tested invariant
+
+**Chosen.** `ESPHal::read_inputs()` caches its sample for the duration of a tick,
+via a counter pair extracted into `firmware/include/deskbot/tick_guard.h` and
+asserted by a host test. `control_task` reads inputs twice per period (once
+inside `Controller::tick()`, once for button policy) and both callers must see
+the same snapshot.
+
+**Why this is in the decisions file and not just a commit message.** It was a
+live bug, it survived every tool that looked at it, and the safety argument for
+one of the core's fault detectors quietly depends on the invariant.
+
+`control_task` calls `read_inputs()` twice per 2 ms period. The guard against
+sampling twice was `if (tick_ == cache_tick_)`, and `cache_tick_` was assigned
+nowhere — the comparison was permanently false. The AS5600 was therefore read
+twice per control period, and:
+
+* `AngleUnwrap`'s plausibility bound is written in *counts per control period*.
+  Called twice per period it checks half a period of motion against a whole
+  period's threshold. The 19× margin documented in `encoder_as5600.h` is real,
+  but its stated premise was not.
+* Each read takes the I2C bus mutex with a 5 ms timeout inside a 2 ms period, so
+  doubling the reads doubles the odds of the timeout whose entire job is to
+  report "no feedback this tick".
+* `i2c=`, `clamp=` and `rej=` in the status line read double during the one
+  bring-up step whose instruction is to watch those counters stay zero — which
+  teaches the operator to disbelieve a counter that is actually telling the
+  truth about a doubled sampling rate.
+
+**Why no tool caught it.** The firmware build compiles it fine — a never-assigned
+variable is not an error. The host suites did not model HAL plumbing. So it is
+invisible to the firmware job *and* the test job, which is exactly the shape of
+bug that survives a green CI forever.
+
+**The rule extracted.** An invariant that exists only in a comment is an
+aspiration. Extract the mechanism into a host-compiled header and assert it, or
+assume it will eventually be violated — preferably by someone reading the comment
+and trusting it. This is the same reasoning that put the encoder unwrap in its own
+testable header instead of inline in `main.cpp`.
+
+**Also in this change, with the same reasoning.** `setup()` used to drop
+`g_cal` when `feedback == None && homed`, duplicating a policy
+`Controller::init()` has since taken over. Deleting the copy is not lost
+defence: a frontend that re-implements core safety policy is the failure mode
+`docs/firmware-design-notes.md` concern #2 was raised about, and the two copies
+drift.
+
+**Cost.** The host test now constructs the guard and counts hardware reads
+directly; a real `ESPHal` cannot be instantiated on a laptop (it pulls in
+Arduino), so the test asserts the invariant *about* the class rather than
+against an `ESPHal` object. That is weaker than the rest of this repo's tests,
+and it is still 100× stronger than a comment.

@@ -43,13 +43,31 @@ same keys, defaults and validation.
 ### Host tests (firmware-only logic, no hardware)
 
 ```sh
-g++ -std=c++17 -Wall -Wextra -fsanitize=undefined,address \
-    -Iinclude -I../core/include tests/firmware/firmware_host_tests.cpp -o /tmp/fwtest && /tmp/fwtest
+# from the repo root (this file lives in firmware/, but the test does not)
+make test-firmware          # optimised, what CI's `make test` runs
+make test-asan              # + ASan/UBSan, what CI's sanitizer job runs
+#   macOS note: Apple clang's ASan runtime can hang even on an empty main();
+#   `make test-asan SAN=undefined` runs just UBSan, which works there.
 ```
 
-91 334 checks: JSON parse/load integrity (including the nested-lookup class
-of bug), the embedded Husky profile, and the AS5600 revolution unwrap across
-wrap points, glitch rejection and datum-loss latching. The unwrap and the
+Manual equivalent, from the repo root:
+
+```sh
+g++ -std=c++17 -Wall -Wextra -fsanitize=undefined,address \
+    -Icore/include -Ifirmware/include -Itests/include \
+    tests/firmware/firmware_host_tests.cpp tests/firmware/host_loader_tu.cpp \
+    -o /tmp/fwtest && /tmp/fwtest
+```
+
+Two source files because the host and embedded JSON parsers both define
+`namespace json` and cannot share a translation unit; `host_loader_tu.cpp`
+wraps the host one so the parity test can compare what each loader produces.
+
+91 395 checks (assertions executed, mostly inside sweeps - not 91 395
+distinct behaviours): JSON parse/load integrity (including the nested-lookup class
+of bug), the embedded Husky profile, loader parity between the simulator and the
+firmware, the AS5600 revolution unwrap across wrap points, glitch rejection and
+datum-loss latching, and the sample-once-per-tick guard. The unwrap and the
 parser are the two places a silent bug costs the most, so they are tested on
 the host where bugs are cheap.
 
@@ -145,6 +163,7 @@ feature they guard and show up in the status line or boot log.
 | Motion planning, homing, stall/limit/thermal supervision, presets | **real** — `../core`, 141 host tests |
 | 2 ms control task (core 1, priority 4, task watchdog 4 s panic) | real |
 | STEP/DIR via LEDC | real — band [10 Hz, 120 kHz], sub-floor stops, over-ceiling clamps, both counted |
+| Inputs sampled at most once per 2 ms control period (`tick_guard.h`) | real, host-tested (was 2x per tick) |
 | Limit switches / buttons, debounced 20/30 ms | real, non-blocking |
 | Enable-chain sense | real, deliberately un-debounced |
 | AS5600 I2C read + shortest-arc unwrap | real code, **untested on hardware**; host-tested logic |

@@ -19,7 +19,8 @@
 // next_sibling), not in a parallel edge pool. That is not just tidiness: with a
 // shared edge pool, a parent's children are interleaved with those of whichever
 // nested container was parsed in between, and every "child i" lookup silently
-// returns a cousin. Exercised by test/json_embed_test.cpp on the host.
+// returns a cousin. Exercised on the host by
+// tests/firmware/firmware_host_tests.cpp (test_nested_lookup_integrity).
 //
 // Supported subset: objects, arrays, numbers, strings, true/false/null - the
 // machine profile language. Anything else is a parse error.

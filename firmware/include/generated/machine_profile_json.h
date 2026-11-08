@@ -5,7 +5,9 @@
 // numbers in the firmware; it is parsed at boot by
 // deskbot/json_embed.h + deskbot/profile_embed.h. Regenerate
 // after editing the JSON, and keep the committed header in sync
-// (the host test test_json_embed.cpp recompiles it every run).
+// (tests/firmware/firmware_host_tests.cpp recompiles it every
+//  run, and tests/firmware/host_loader_tu.cpp checks the two
+//  profile loaders still agree on every field).
 #pragma once
 
 #define DESKBOT_MACHINE_NAME "husky-46x24"

@@ -27,9 +27,11 @@ docs/          decisions, handoff specs, config plans
 
 | Area | State |
 |---|---|
-| Core motion + safety library | **done, 141 host checks passing** |
+| Core motion + safety library | **done, 141 host behaviour checks passing** |
+| Firmware-only host tests | **done, 91,395 checks** (iterations over sweeps; `tests/firmware`) |
 | Simulator + machine-profile loader | **done** (`tests/sim`, `make run`) |
-| CI (host tests, header sync, firmware build) | **done** — `.github/workflows/ci.yml` |
+| Fault-injection scenarios | **done** (`make scenarios`; asserts *which* latch trips) |
+| CI (host tests, sanitizers, header sync, sim, scenarios, firmware build) | **done** — `.github/workflows/ci.yml` |
 | Husky machine profile | numbers present, **three must be measured** |
 | Motor/gearbox sizing model | `scripts/sizing.py`, validated against published desk speeds |
 | ESP32 firmware | compiling scaffold, no hardware yet — `firmware/` |
@@ -37,6 +39,10 @@ docs/          decisions, handoff specs, config plans
 | TMC5160 SPI config (biggest firmware gap) | planned — `docs/TMC5160-CONFIG-PLAN.md` |
 | Printed gearbox / mount | not started — see `docs/cad-agent.md` |
 | Control PCB | not started — see `docs/pcb-agent.md` (note: 5160 needs external MOSFETs) |
+
+The two check counts measure different things and are not comparable: 141 is
+distinct behaviours asserted against a fake desk, 91,395 is assertions executed
+while sweeping the encoder unwrap and JSON parser across their input spaces.
 
 ## Why this shape
 
@@ -137,14 +143,25 @@ core/include/desk/
   safety.h            calibration model, supervisor, fault latches
   controller.h        the machine: one tick() call
   fake_bench.h        simulated desk that lies to you on purpose
-cli/
-  src/sim_main.cpp    simulator CLI
-  include/deskbot/    JSON parser + profile loader (no dependencies)
-firmware/
+tests/                everything host-compiled; all three need no ESP32
+  core/               behaviour suite (drives the real controller)
+  firmware/           host tests for firmware-only logic; two TUs because the
+                      host and embedded JSON parsers cannot share one
+  sim/                the simulator CLI that drives the real controller
+  include/deskbot/    host JSON parser + profile loader (no dependencies)
+  run_scenarios.sh    fault-injection scenarios (assert the latch that trips)
+machines/             one .machine.json per desk - THE generic seam
+firmware/             ESP32-S3 firmware (PlatformIO); a consumer of core/
+  include/deskbot/    HAL headers host-tested (encoder unwrap, tick guard)
+  include/generated/  machine profile embedded as a header (keep in sync)
   README.md           HAL implementation, pin map, build + bring-up
-husky-bench/          prints + build guide for one specific bench
 docs/                 agent handoff specs + decisions record
+husky-bench/          (planned) prints + build guide; does not exist yet
 ```
+
+Nothing lives at a top-level `cli/` — the simulator and its helpers moved under
+`tests/` (commit d5999a5). If a path here is missing, trust this tree, not the
+prose.
 
 ## Safety
 
