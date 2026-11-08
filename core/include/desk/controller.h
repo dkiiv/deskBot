@@ -515,7 +515,6 @@ class Controller {
         budget = static_cast<us_t>(secs * 1e6f);
       }
       home_deadline_us_ = hal_->now_us() + budget;
-      home_budget_us_ = budget;
     }
     if (home_phase_ != HomePhase::Done && home_deadline_us_ &&
         hal_->now_us() > home_deadline_us_) {
@@ -689,14 +688,12 @@ class Controller {
   MachineState state_ = MachineState::Uncalibrated;
   HomePhase home_phase_ = HomePhase::Init;
   us_t home_deadline_us_ = 0;
-  us_t home_budget_us_ = 0;
   mm_t target_mm_ = 0.0f;
   rate_t vel_mm_s_ = 0.0f;
   bool hold_current_ = false;
   bool have_enc_ = false;
   bool was_low_ = false;
   bool resync_pending_ = false;   // model awaiting first encoder reconciliation
-  int  log_burst_ = 0;  // reserved for rate-limited logging
 
   steps_t cmd_steps_[kMaxAxis] = {};
   double step_carry_ = 0.0;   // fractional microsteps between ticks

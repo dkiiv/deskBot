@@ -108,7 +108,6 @@ class FakeBench : public Hal {
     // bench that integrates analytically would disagree with the controller's
     // own integer model by up to a step every tick, and that residue looks
     // exactly like a stall. Same reason the controller quantises once.
-    const AxisProfile& a = machine.axis[0];
     microstep_acc_ += static_cast<double>(last_rate_steps_s) * dt_s;
     steps_t whole = static_cast<steps_t>(microstep_acc_);
     if (microstep_acc_ < 0 && static_cast<double>(whole) > microstep_acc_) --whole;
@@ -117,7 +116,7 @@ class FakeBench : public Hal {
     // corresponds to. Fault-injection knobs compare against the RATE, so keep
     // both: comparing a per-tick distance to a mm/s threshold silently disables
     // the knob, which is worse than not having it because it tests nothing.
-    const float applied_mm = steps_to_mm_pure_(whole, dt_s);
+    const float applied_mm = steps_to_mm_pure_(machine, whole);
     const float mm_s = (dt_s > 0.0f) ? applied_mm / dt_s : 0.0f;
     float applied = applied_mm;
 
@@ -203,18 +202,13 @@ class FakeBench : public Hal {
   float obstacle_stop_mm_ = 750.0f;
 
  private:
-  // Distance travelled this tick from an integer count of microsteps.
-  float steps_to_mm_pure_(steps_t steps, float) const {
-    return machine.steps_to_mm(machine.axis[0], steps);
+  // Distance travelled this tick from an integer count of microsteps. Note this
+  // is the *pure* geometric conversion: it deliberately ignores slip, binding
+  // and obstacles, which the caller applies afterwards.
+  static float steps_to_mm_pure_(const MachineProfile& m, steps_t steps) {
+    return m.steps_to_mm(m.axis[0], steps);
   }
 
-  static float mmlIKELY_(rate_t steps_s, const AxisProfile& a) {
-    // inverse of Controller::command_axis
-    if (steps_s == 0.0f) return 0.0f;
-    const float revs_s = static_cast<float>(steps_s) /
-        (static_cast<float>(a.steps_per_motor_rev) * a.gear_ratio);
-    return revs_s * a.mm_per_shaft_rev;
-  }
   // Counts are referenced to the low hard stop, which is where the controller
   // anchors the encoder during homing; below the stop they go negative.
   i64 counts_for_(mm_t mm) const {
