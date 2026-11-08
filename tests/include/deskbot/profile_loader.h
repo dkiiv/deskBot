@@ -89,6 +89,12 @@ inline bool load_machine(const std::string& path, MachineProfile& m, std::string
   s.position_loss_mm      = sf.at("position_loss_mm").as_flt(s.position_loss_mm);
   s.stall_backoff_up_mm   = sf.at("stall_backoff_up_mm").as_flt(s.stall_backoff_up_mm);
   s.home_rate_mm_s        = sf.at("home_rate_mm_s").as_flt(s.home_rate_mm_s);
+  // Home watchdog tuning. These two were once read only by the firmware loader,
+  // so a profile that shortened the home timeout changed the desk and did
+  // nothing in the simulator - the divergence test_loaders_agree_on_* guards
+  // against. Keys, defaults and units must match profile_embed.h exactly.
+  s.home_timeout_margin   = sf.at("home_timeout_margin").as_flt(s.home_timeout_margin);
+  s.home_max_us           = static_cast<us_t>(sf.at("home_max_ms").as_num(0.0) * 1e3);
   s.jog_lookahead_mm      = sf.at("jog_lookahead_mm").as_flt(s.jog_lookahead_mm);
   s.max_skew_mm           = sf.at("max_skew_mm").as_flt(s.max_skew_mm);
   s.skew_alarm_mm         = sf.at("skew_alarm_mm").as_flt(s.skew_alarm_mm);

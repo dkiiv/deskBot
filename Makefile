@@ -25,7 +25,10 @@ FLAGS   = $(CXXFLAGS) $(WEXTRA)
 
 TEST_SRC = tests/core/test_core.cpp
 SIM_SRC  = tests/sim/sim_main.cpp
-FW_SRC   = tests/firmware/firmware_host_tests.cpp
+# Two TUs: firmware_host_tests.cpp includes the EMBEDDED parser; host_loader_tu.cpp
+# includes the HOST parser. They cannot share a TU (both define `namespace json`
+# with incompatible types) - see the comment at the top of host_loader_tu.cpp.
+FW_SRC   = tests/firmware/firmware_host_tests.cpp tests/firmware/host_loader_tu.cpp
 
 # Header-only: EVERY header a binary includes is a dependency, otherwise an edit
 # silently leaves a stale binary behind, which is a very confusing way to "fix a

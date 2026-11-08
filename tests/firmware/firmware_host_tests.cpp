@@ -9,6 +9,7 @@
 // Build + run (from firmware/):
 //   g++ -std=c++17 -Wall -Wextra -fsanitize=undefined,address
 //       -Iinclude -I../core/include tests/firmware/firmware_host_tests.cpp -o /tmp/fwtest && /tmp/fwtest
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -19,6 +20,13 @@
 #include "deskbot/profile_embed.h"
 #include "deskbot/tick_guard.h"
 #include "generated/machine_profile_json.h"
+
+// Implemented in host_loader_tu.cpp, which is the only place the host JSON
+// parser may be included (it collides with the embedded parser otherwise).
+namespace desk_test {
+bool load_host(const std::string& json_text, desk::MachineProfile& out,
+               std::string& err);
+}
 
 static int g_fail = 0;
 static int g_pass = 0;
@@ -398,6 +406,108 @@ static void test_tick_guard_one_sample_per_period() {
 }
 
 
+// ------------------------------------------------------- loader parity (E1)
+// The host (simulator) and embedded (firmware) loaders must turn the same JSON
+// into the same MachineProfile. firmware/README.md and json_embed.h both state
+// this as policy ("change the key here, change it there") but until now nothing
+// could enforce it: the two parsers both define `namespace json` with
+// incompatible types and cannot share a translation unit. So the comparison
+// spans two TUs that meet only at the filled profile - host side in
+// host_loader_tu.cpp, embedded side here.
+//
+// This test found its first divergence on the tree that introduced it: the
+// embedded loader reads home_timeout_margin and home_max_ms and the host loader
+// ignores both, so a profile that tunes the home watchdog changed firmware
+// behaviour and did nothing in the simulator. Both are now read by both.
+static void test_loaders_agree_on_every_field() {
+  static json::Dom dom;
+  const char* err = nullptr;
+
+  MachineProfile embedded{};
+  CHECK(load_machine(kMachineJson, sizeof(kMachineJson) - 1, dom, embedded, &err));
+
+  MachineProfile host{};
+  std::string herr;
+  CHECK(desk_test::load_host(kMachineJson, host, herr));
+
+  // Field-by-field, with names in the failure so a divergence says which knob
+  // drifted rather than "some bytes differ".
+#define PARITY(field) CHECK(host.field == embedded.field)
+#define PARITY_F(field, eps) CHECK(std::fabs(host.field - embedded.field) <= (eps))
+  PARITY(profile_version);
+  PARITY(drive);
+  PARITY(feedback);
+  PARITY(coupling);
+  PARITY(axis_count);
+  for (int i = 0; i < kMaxAxis; ++i) {
+    PARITY(axis[i].steps_per_motor_rev);
+    PARITY_F(axis[i].gear_ratio, 1e-6f);
+    PARITY_F(axis[i].mm_per_shaft_rev, 1e-6f);
+    PARITY_F(axis[i].travel_low_mm, 1e-4f);
+    PARITY_F(axis[i].travel_high_mm, 1e-4f);
+    PARITY_F(axis[i].vmax_up_mm_s, 1e-6f);
+    PARITY_F(axis[i].vmax_down_mm_s, 1e-6f);
+    PARITY_F(axis[i].amax_mm_s2, 1e-6f);
+    PARITY_F(axis[i].direction, 1e-6f);
+    PARITY(axis[i].encoder_counts_per_motor_rev);
+  }
+  PARITY_F(safety.stall_lag_mm_moving, 1e-6f);
+  PARITY_F(safety.stall_lag_mm_stopped, 1e-6f);
+  PARITY_F(safety.position_loss_mm, 1e-6f);
+  PARITY_F(safety.stall_backoff_up_mm, 1e-6f);
+  PARITY_F(safety.home_rate_mm_s, 1e-6f);
+  PARITY_F(safety.home_timeout_margin, 1e-6f);
+  PARITY(safety.home_max_us);
+  PARITY_F(safety.jog_lookahead_mm, 1e-6f);
+  PARITY_F(safety.max_skew_mm, 1e-6f);
+  PARITY_F(safety.skew_alarm_mm, 1e-6f);
+  PARITY_F(safety.skew_trim_per_mm, 1e-6f);
+  PARITY_F(safety.skew_trim_max, 1e-6f);
+  PARITY_F(safety.temp_c_stop, 1e-6f);
+  PARITY_F(safety.temp_c_reenter, 1e-6f);
+  PARITY(safety.obstacle_backoff);
+  PARITY(safety.stall_hold_us);
+  PARITY(safety.remote_deadman_us);
+  PARITY(safety.move_window_us);
+  PARITY(safety.move_max_us);
+  PARITY(safety.cool_us);
+#undef PARITY
+#undef PARITY_F
+
+  // Identity is const char*: the host loader strdups, the embedded loader points
+  // into its Dom. Compare the strings, not the pointers.
+  CHECK(std::strcmp(host.name, embedded.name) == 0);
+}
+
+// The structural half: add a key to a profile that only ONE loader understands
+// and the field-by-field test above catches it *when it affects a value*. This
+// pins the specific knobs that drifted once already, so renaming a default or
+// dropping a read in either loader fails even if the Husky profile happens to
+// carry a value that masks it.
+static void test_loaders_agree_on_watchdog_knobs() {
+  static json::Dom dom;
+  const char* err = nullptr;
+  // Non-default home_timeout_margin and home_max_ms: if a loader ignores the
+  // key it falls back to the struct default and the two disagree here.
+  const char* text =
+      R"({"identity":{"name":"t","profile_version":1},
+          "axes":[{"steps_per_motor_rev":3200,"gear_ratio":5.0,"mm_per_shaft_rev":5.5,
+                   "travel_low_mm":660,"travel_high_mm":990}],
+          "safety":{"home_timeout_margin":2.75,"home_max_ms":180000}})";
+  MachineProfile embedded{};
+  CHECK(load_machine(text, std::strlen(text), dom, embedded, &err));
+
+  MachineProfile host{};
+  std::string herr;
+  CHECK(desk_test::load_host(text, host, herr));
+
+  CHECK_NEAR(host.safety.home_timeout_margin, 2.75f, 1e-6f);
+  CHECK_NEAR(embedded.safety.home_timeout_margin, 2.75f, 1e-6f);
+  CHECK(host.safety.home_max_us == embedded.safety.home_max_us);
+  CHECK(host.safety.home_max_us == 180000000ULL);   // 180000 ms in microseconds
+}
+
+
 // ----------------------------------------------------- rate sign convention
 // The sign convention the HAL must honour: core passes mm_to_steps(direction,
 // mm), so a positive drive_rate() is the direction the profile calls "up".
@@ -432,6 +542,8 @@ int main() {
   test_glitch_does_not_shift_datum();
   test_track_scaling_and_sign();
   test_tick_guard_one_sample_per_period();
+  test_loaders_agree_on_every_field();
+  test_loaders_agree_on_watchdog_knobs();
   test_sign_convention_helper();
 
   std::printf("\n%d checks passed, %d failed\n", g_pass, g_fail);
