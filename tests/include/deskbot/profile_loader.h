@@ -4,6 +4,7 @@
 // Everything a new machine needs lives in one JSON document; nothing about a
 // specific bench is compiled in.
 #pragma once
+#include <deque>
 #include <string>
 #include "desk/machine_profile.h"
 #include "deskbot/json_mini.h"
@@ -29,6 +30,21 @@ inline AxisCoupling coupling_from(const std::string& s) {
   return AxisCoupling::Single;
 }
 
+// Process-lifetime string interning for MachineProfile's borrowed const char*.
+// The struct holds raw pointers nobody owns or frees, so the loader must hand
+// out storage that simply never goes away. deque, not vector: push_back must
+// not move existing elements (a vector reallocation, or SSO string movement,
+// would invalidate pointers already stored in earlier-loaded profiles), and
+// std::deque guarantees reference stability across push_back. A reachable
+// static is what LeakSanitizer looks past: this is storage with a deliberate
+// lifetime, not a leak. (The strdup this replaced leaked on every load -
+// reachable only by tests before ASan ran it for the first time.)
+inline const char* intern_static(const std::string& s) {
+  static std::deque<std::string> arena;
+  arena.push_back(s);
+  return arena.back().c_str();
+}
+
 // Load a profile. `err` explains the first missing required key, because a
 // silently defaulted scale factor is the most expensive mistake a retrofit can
 // make: it looks like it works and then lies about the height.
@@ -38,8 +54,8 @@ inline bool load_machine(const std::string& path, MachineProfile& m, std::string
   if (root.kind != json::Value::Kind::Obj) { err = "profile root must be an object"; return false; }
 
   const json::Value& id = root.at("identity");
-  m.name = strdup(id.at("name").as_str("generic").c_str());
-  m.url = strdup(id.at("url").as_str("").c_str());
+  m.name = intern_static(id.at("name").as_str("generic"));
+  m.url = intern_static(id.at("url").as_str(""));
   m.profile_version = static_cast<u32>(id.at("profile_version").as_num(1));
 
   m.drive = drive_from(root.at("drive").at("kind").as_str("stepper_pulse"));
