@@ -1,7 +1,9 @@
 # Roadmap — honest audit of deskBot (2026-11-07)
 
-> **Progress (same day, after approval).** Phase 1 and Phase 2 are complete and
-> pushed; §7 has a ✅ on each landed step, with what was *not* done and why.
+> **Progress (same day, after approval).** Phase 1 and Phase 2 are complete, pushed,
+> and **CI is green on GitHub** (`2a16229`, both jobs, all steps). §7 has a ✅ on each
+> landed step, with what was *not* done and why. The path there is worth reading in §8:
+> the new gate caught two real pre-existing bugs on its first Linux runs.
 > Phase 3 items are the ones this audit deliberately left for the owner, because
 > they change safety semantics and the repo's own rule 5 wants the trade
 > recorded with a human behind it.
@@ -510,7 +512,50 @@ are estimates and the CAD/PCB lanes stay correctly parked.
 
 ---
 
-## 8. Explicitly *not* proposing
+---
+
+## 8. What CI caught after the push (the proof the gate was worth adding)
+
+The first CI run *of the new gate* went red twice. Both times the red was correct, and
+both times it caught a **pre-existing** bug that every previous green run had missed.
+
+**Red #1 — `-Werror` (step B4): a real cross-compiler divergence in `core/`.**
+`SafetyMonitor::tick` had a lambda taking `const Inputs& in` while the enclosing
+function's parameter is also `in`. GCC 14 flags that under `-Wshadow`; Apple clang 17
+does not. Every local run before this was clang, so the shadow had never been seen by
+anything. Reproduced locally (`g++-14`, Homebrew) after reading the annotations: exactly
+one diagnostic in repo files across all three host TUs. Fix: rename the parameter
+(`ec7cbac`). Behaviour cannot change — the lambda captures by reference and its only
+call site passes the outer `in` — which is also why no human reading it ever would.
+
+**Red #2 — the ASan job (step B3): a latent leak on its first-ever Linux run.**
+The host loader filled `MachineProfile.name/url` with `strdup` and nothing in the repo
+has ever called `free` (grep-verified: zero hits). Latent forever because that overload
+is reachable only from the simulator — until the *loader-parity test added in this
+roadmap* became the first caller under a leak checker. Fix: intern into a function-local
+`static std::deque<std::string>` (stable references — `vector` reallocation or SSO moves
+would dangle pointers handed to earlier profiles; reachable statics are not leaks).
+`2a16229`, CI green.
+
+**Process notes, both uncomfortable:**
+- Diagnosing CI red with only public API access (annotations say "exit code 2"; raw logs
+  need repo-admin) is slow and blind. Splitting the combined sanitizer step into two —
+  one per suite — is what localized Red #2 to the firmware suite. A gate step that runs
+  two programs cannot say which one died, and that is a design flaw in the gate, not in
+  the code under test.
+- One commit message (`2a16229`) described a temporary CI diagnostic that was never
+  actually committed — the header fix alone was enough, and the message claimed extra
+  machinery that staging silently dropped. Corrected here rather than by force-pushing
+  over a green, referenced run. **Lesson: re-read `git show` before `git push`, not just
+  `git status`.**
+
+**Net:** the audit's Phase 1 thesis was that the gate could not fail for the reasons it
+claims. Two pushes later, that gate caught two bugs — one a genuine cross-compiler
+divergence in the safety core, one a leak that had been sitting in the loader since it
+was written. That is the strongest available evidence for keeping it.
+
+
+## 9. Explicitly *not* proposing
 
 - **No restructuring.** The core/HAL/tests split, header-only core, generated committed
   header, `firmware/` as consumer of `core/`: all justified, and AGENTS.md defends each with
