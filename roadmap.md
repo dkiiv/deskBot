@@ -1,7 +1,14 @@
 # Roadmap — honest audit of deskBot (2026-11-07)
 
-Audited at `b46c23d` on macOS (Apple clang 17, C++17). **No work was done inside the
-repo**: `git status` is clean, `build/` was the only thing created. Every claim below
+> **Progress (same day, after approval).** Phase 1 and Phase 2 are complete and
+> pushed; §7 has a ✅ on each landed step, with what was *not* done and why.
+> Phase 3 items are the ones this audit deliberately left for the owner, because
+> they change safety semantics and the repo's own rule 5 wants the trade
+> recorded with a human behind it.
+
+Audited at `b46c23d` on macOS (Apple clang 17, C++17). At audit time **no work
+was done inside the repo**: `git status` was clean and `build/` was the only
+thing created. Every claim below
 is backed by something I ran — the commands are in §6 so you can re-check me.
 
 Read this as: the architecture is good and should not be restructured. The problems are
@@ -416,36 +423,70 @@ make run             # clean sim run
   loaders.
 - Probes lived outside the repo (`~/.hermes/cache/scratch/dbaudit/`). Repo left clean:
   `git status --porcelain | wc -l` → 0.
-- **Not verified:** anything requiring an ESP32 (no board; `pio` is not installed on this
-  machine, so `pio run -e esp32s3` was not re-run — CI is the only evidence the firmware
-  compiles, and A1 lives on exactly that unverifiable path) and anything requiring real
-  hardware or network (no `gh` auth, so I did not check whether CI is currently green).
+- **Not verified at audit time:** anything requiring an ESP32 (no board; `pio` was not
+  installed on this machine, so `pio run -e esp32s3` was not run — CI was the only
+  evidence the firmware compiles, and A1 lived on exactly that unverifiable path) and
+  anything requiring real hardware or network (no `gh` auth, so whether CI was
+  currently green was not checked).
+- **Since approval:** `pio` was installed in a scratch venv and `pio run -e esp32s3`
+  builds clean for the touched firmware (RAM 11.2% / Flash 16.4%), so the firmware half
+  of A1 is now compiled-and-checked rather than CI-only. **Nothing has run on hardware**
+  — no board exists, and that limit is unchanged.
 
 ---
 
-## 7. Proposed sequence
+## 7. Proposed sequence — Phase 1 & 2 landed, Phase 3 pending owner
 
-I have not started any of it. Ordered so each step is independently landable and the two
-CI lies go first — while the gate is wrong, every other fix is less trustworthy than it
-looks.
+Ordered so each step is independently landable and the two CI lies go first. ✅ =
+committed and pushed; the commit is named where a claim needs an address.
 
-**Phase 1 — make the gate tell the truth** (no core edits, no hardware)
-1. `B1` add firmware headers to `test_firmware`'s prerequisites.
-2. `B2` `pipefail` in the Makefile so `make run` can fail.
-3. `B4` remove the 2 warnings, add `-Werror` to CI.
-4. `B3` add `make test-asan` (UBSan+ASan) + a CI job; add an oversized-profile rejection test.
-5. `B5` fix the two phantom test filenames, including in the generator; make the README's
-   check-count column distinguish behaviours from iterations.
-> Gate: all of the above pass locally; then deliberately break the sim (`--stall-at`) and
-> confirm CI goes red. That last check is the point of the phase.
+**Phase 1 — make the gate tell the truth** ✅
+1. ✅ `B1` firmware headers added to `test_firmware`'s prerequisites. Verified both
+   directions: a firmware-header touch now rebuilds, and an untouched tree does not.
+2. ✅ `B2` `make run` no longer pipes, and `.SHELLFLAGS` adds pipefail. Verified with a
+   profile-only fault (injected `home_max_ms=1`): sim exits 3 and `make run` now exits 2
+   (`Error 3`) where it exited 0 before the fix — so the "fault-free exit" CI step can
+   fail for the reason it names.
+3. ✅ `B4` both warnings removed, `-Werror` added as a ratchet (override `WEXTRA=`).
+4. ✅ `B3` `make test-asan` (ASan+UBSan, UB fatal) + CI job. UBSan clean locally; **ASan
+   is first proven in CI**, because Apple clang's ASan runtime hangs even on
+   `int main(){return 0;}` here. `SAN=undefined` is the documented local subset.
+5. ✅ `B5` the two phantom test filenames fixed *in the generator* (not just the header,
+   which it regenerates); README distinguishes behaviours from iterations. Regenerated
+   header is byte-identical, so CI's sync check passes.
+   ➕ **went beyond the roadmap:** the phase is worthless if the hazard assertions
+   can't fail, so `tests/run_scenarios.sh` asserts *which latch trips* (not just the exit code),
+   and was validated by mutation — neutering the stall latch reddens only the stall
+   scenario, neutering the home watchdog reddens only that one. First draft asserted only
+   "exit 3" and passed a core that cannot detect a stall; that failure is why it asserts
+   names now.
 
-**Phase 2 — the firmware bug and the parity hole**
-6. `A1` assign `cache_tick_`; add a sample-count assertion so the guard can't rot again.
-7. `E1` cross-loader equality test (host vs embedded, every field) — this also *catches*
-   the `home_timeout_margin`/`home_max_ms` divergence as a failing test before anyone fixes it.
-8. `A4` delete the redundant open-loop workaround in `setup()`; update design notes #2.
-9. `D/E7` doc drift pass: README layout tree, check counts, firmware build instructions,
-   delete `firmware/include/README`, mark planned paths, `.DS_Store`, `v0.1-core` tag.
+**Phase 2 — the firmware bug and the parity hole** ✅
+6. ✅ `A1` the guard was not just reassigned — the counter pair moved to
+   `tick_guard.h` and is host-tested (the firmware build cannot catch this bug and the
+   old code proves a bare member rots silently). `pio run -e esp32s3` builds clean.
+7. ✅ `E1` cross-loader equality test. It could not be one TU — both parsers define
+   `namespace json`, a genuine redefinition error — so it spans two TUs meeting at the
+   filled `MachineProfile`. TDD red first: it caught the `home_timeout_margin`/`home_max_ms`
+   divergence as three failing host-side assertions, then green after the host loader read
+   both. No reverse divergence found.
+8. ✅ `A4` redundant open-loop workaround deleted from `setup()`; design-notes status note
+   added (kept concerns #1/#2 as history, not an open list).
+9. ✅ `D/E7` README layout tree (verified `d5999a5` moved `cli/`→`tests/`), check counts,
+   firmware build command (was uncopy-pasteable), `firmware/include/README` deleted,
+   planned paths marked, `.DS_Store`/`build-san` ignored.
+- ⏭️ **`v0.1-core` tag not created** — pushing a tag to a public repo is the kind of
+  semi-irreversible act left for the owner.
+- ⏭️ **AGENTS.md:31 still says "91,334"** (now 91,395) — protected file, edit was declined
+  at approval; owner one-liner.
+
+**Phase 3 — safety semantics: deliberately NOT started (owner lane).** Each needs a sign-off
+call this audit is not authorised to make: `A2` (lost feedback → fault), `A3`/`E4` (is
+`axis_count > 1` supported?), `C1` (wire or delete each dead knob), `C3`/`C4`. Rule 5
+requires a test *and* a DECISIONS line per item; doing those unilaterally would be exactly
+the "software lane edits core" the repo's rules forbid without the owner.
+
+**Phase 4** not started (features + the `E2` parser decision).
 
 **Phase 3 — safety semantics (needs owner sign-off + test + DECISIONS line each)**
 10. `A2` lost-feedback-on-a-feedback-machine → `position_lost`, with a mid-life-cable-pull test.

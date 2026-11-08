@@ -107,8 +107,10 @@ test-core-asan: $(SANBUILD)/test_core
 test-firmware-asan: $(SANBUILD)/test_firmware
 	ASAN_OPTIONS=$(ASAN_OPTIONS) ./$<
 
+# The message reports $(SAN), because a build that prints "address + undefined"
+# after running `SAN=undefined` is a gate lying about what it checked.
 test-asan: test-core-asan test-firmware-asan
-	@echo "sanitizers: clean (address + undefined, UB is fatal)"
+	@echo "sanitizers: clean (-fsanitize=$(SAN), UB is fatal)"
 
 sim: $(BUILD)/deskbot-sim
 
